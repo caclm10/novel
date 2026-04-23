@@ -10,6 +10,12 @@ const getDatabases = async () => {
     return new Databases(client);
 }
 
+function extractFileId(url: string | null) {
+   if (!url || !url.includes(appwriteConfig.storageBucketId)) return null;
+   const match = url.match(/\/files\/([a-zA-Z0-9_-]+)\/view/);
+   return match ? match[1] : null;
+}
+
 // Mengambil seluruh list novel untuk diletakkan di rak
 export async function getNovels() {
   const databases = await getDatabases();
@@ -91,6 +97,17 @@ export async function getNovelWithChapters(novelId: string) {
 export async function deleteNovel(novelId: string) {
    const databases = await getDatabases();
    
+   // Ambil novel lama untuk menghapus gambarnya jika ada
+   const novel = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.novelsTableId, novelId);
+   const fileId = extractFileId(novel.coverImage);
+   if (fileId) {
+      try {
+         const client = await getSessionClient();
+         const storage = new Storage(client);
+         await storage.deleteFile(appwriteConfig.storageBucketId, fileId);
+      } catch (e) { console.error("Gagal hapus file cover dari storage", e); }
+   }
+
    // Hapus Volumes
    const volumesRes = await databases.listDocuments(
       appwriteConfig.databaseId, appwriteConfig.volumesTableId, [Query.equal('novelId', novelId)]
@@ -181,6 +198,18 @@ export async function updateNovel(novelId: string, title: string, author: string
 
 export async function updateNovelCover(novelId: string, coverImage: string | null) {
   const databases = await getDatabases();
+
+  // Hapus file lama di storage jika ada
+  const oldNovel = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.novelsTableId, novelId);
+  const oldFileId = extractFileId(oldNovel.coverImage);
+  if (oldFileId) {
+     try {
+         const client = await getSessionClient();
+         const storage = new Storage(client);
+         await storage.deleteFile(appwriteConfig.storageBucketId, oldFileId);
+     } catch (e) { console.error("Gagal hapus file cover lama", e); }
+  }
+
   await databases.updateDocument(
       appwriteConfig.databaseId,
       appwriteConfig.novelsTableId,
@@ -199,6 +228,15 @@ export async function uploadNovelCover(novelId: string, formData: FormData) {
   const client = await getSessionClient();
   const databases = new Databases(client);
   const storage = new Storage(client);
+
+  // Hapus gambar lama dulu jika ada
+  const oldNovel = await databases.getDocument(appwriteConfig.databaseId, appwriteConfig.novelsTableId, novelId);
+  const oldFileId = extractFileId(oldNovel.coverImage);
+  if (oldFileId) {
+     try {
+         await storage.deleteFile(appwriteConfig.storageBucketId, oldFileId);
+     } catch (e) { console.error("Gagal hapus file cover lama", e); }
+  }
 
   const uploadedFile = await storage.createFile(
       appwriteConfig.storageBucketId,
