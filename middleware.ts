@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get(`a_session_${projectId}`);
   const { pathname } = request.nextUrl;
 
-  const isPublicRoute = pathname.startsWith('/login') || pathname.startsWith('/api/');
+  const isPublicRoute = pathname.startsWith('/login') || pathname.startsWith('/api/') || pathname.startsWith('/auth/verify');
 
   if (!sessionCookie && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url));

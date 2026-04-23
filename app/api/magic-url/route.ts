@@ -16,7 +16,7 @@ export async function POST(request: Request) {
         await account.createMagicURLToken(
             ID.unique(),
             email,
-            `${origin}/api/magic-url/callback`
+            `${origin}/auth/verify`
         );
         
         return NextResponse.json({ success: true });
