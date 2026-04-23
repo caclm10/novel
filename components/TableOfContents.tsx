@@ -8,6 +8,10 @@ import { createVolume, updateNovel, updateNovelCover, uploadNovelCover } from '.
 import { createChapter, deleteChapter } from '../actions/chapter';
 import { useRef, useState } from 'react';
 import { useReadingHistory } from '../hooks/useReadingHistory';
+import { storage } from '@/lib/appwrite';
+import { appwriteConfig } from '@/lib/appwrite/config';
+import { ID } from 'appwrite';
+import { toast } from "sonner";
 
 interface TableOfContentsProps {
   novel: Novel;
@@ -30,18 +34,37 @@ export default function TableOfContents({ novel }: TableOfContentsProps) {
 
   const handleAddVolume = async () => {
     const title = window.prompt("Nama Volume/Arc Baru (Misal: 'Bagian 1: Permulaan'):");
-    if (title) await createVolume(novel.id, title);
+    if (title) {
+       try {
+          await createVolume(novel.id, title);
+          toast.success("Volume baru berhasil ditambahkan!");
+       } catch (e) {
+          toast.error("Gagal menambahkan volume.");
+       }
+    }
   };
 
   const handleAddChapter = async (volumeId: string) => {
     const title = window.prompt("Masukkan Judul Bab Baru:");
-    if (title) await createChapter(volumeId, title, novel.id);
+    if (title) {
+       try {
+          await createChapter(volumeId, title, novel.id);
+          toast.success("Bab baru berhasil ditambahkan!");
+       } catch (e) {
+          toast.error("Gagal menambahkan bab.");
+       }
+    }
   };
 
   const handleDeleteChapter = async (e: React.MouseEvent, chapterId: string) => {
     e.preventDefault();
     if (window.confirm("Menghapus bab ini akan menghilangkan konten tulisannya selamanya. Lanjutkan?")) {
-       await deleteChapter(chapterId, novel.id);
+       try {
+          await deleteChapter(chapterId, novel.id);
+          toast.success("Bab berhasil dihapus.");
+       } catch (e) {
+          toast.error("Gagal menghapus bab.");
+       }
     }
   };
 
@@ -52,17 +75,27 @@ export default function TableOfContents({ novel }: TableOfContentsProps) {
     if (!newAuthor) return;
     
     if (newTitle !== novel.title || newAuthor !== novel.author) {
-      await updateNovel(novel.id, newTitle, newAuthor);
+      try {
+        await updateNovel(novel.id, newTitle, newAuthor);
+        toast.success("Identitas novel berhasil diperbarui!");
+      } catch (e) {
+        toast.error("Gagal memperbarui identitas novel.");
+      }
     }
   };
 
   const handleEditCover = async () => {
     const newCover = window.prompt("Masukkan URL gambar eksternal untuk sampul baru:");
     if (newCover === null) return; 
-    if (newCover.trim() === '') {
-       await updateNovelCover(novel.id, null);
-    } else {
-       await updateNovelCover(novel.id, newCover);
+    try {
+      if (newCover.trim() === '') {
+         await updateNovelCover(novel.id, null);
+      } else {
+         await updateNovelCover(novel.id, newCover);
+      }
+      toast.success("Sampul novel berhasil diperbarui!");
+    } catch (e) {
+      toast.error("Gagal memperbarui sampul.");
     }
   };
 
@@ -74,10 +107,12 @@ export default function TableOfContents({ novel }: TableOfContentsProps) {
       setIsUploading(true);
       const formData = new FormData();
       formData.append('file', file);
+      
       await uploadNovelCover(novel.id, formData);
+      toast.success("Gambar berhasil diunggah dan disimpan!");
     } catch (err) {
       console.error("Gagal mengunggah", err);
-      alert("Gagal mengunggah gambar!");
+      toast.error("Gagal mengunggah gambar sampul.");
     } finally {
       setIsUploading(false);
       // Reset input file
@@ -87,7 +122,12 @@ export default function TableOfContents({ novel }: TableOfContentsProps) {
 
   const handleRemoveCover = async () => {
     if (window.confirm("Beneran ingin menghapus gambar sampul buku ini?")) {
-       await updateNovelCover(novel.id, null);
+       try {
+         await updateNovelCover(novel.id, null);
+         toast.success("Sampul berhasil dihapus.");
+       } catch (e) {
+         toast.error("Gagal menghapus sampul.");
+       }
     }
   };
 

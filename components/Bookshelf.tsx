@@ -3,8 +3,10 @@
 import { Novel } from '../types/novel';
 import Link from 'next/link';
 import { useReadingHistory } from '../hooks/useReadingHistory';
-import { Download, PlayCircle, Plus, Trash2 } from 'lucide-react';
+import { Download, PlayCircle, Plus, Trash2, LogOut } from 'lucide-react';
 import { createNovel, deleteNovel } from '../actions/novel';
+import { useRouter } from 'next/navigation';
+import { toast } from "sonner";
 
 interface BookshelfProps {
   novels: Novel[];
@@ -12,6 +14,18 @@ interface BookshelfProps {
 
 export default function Bookshelf({ novels }: BookshelfProps) {
   const { history } = useReadingHistory();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    if (window.confirm('Apakah Anda yakin ingin keluar?')) {
+       try {
+          await fetch('/api/logout', { method: 'POST' });
+          router.push('/login');
+       } catch (e) {
+          console.error(e);
+       }
+    }
+  };
 
   const handleBackup = () => {
      try {
@@ -38,17 +52,27 @@ export default function Bookshelf({ novels }: BookshelfProps) {
     const author = window.prompt("Masukkan Nama Penulis:");
     if (!author) return;
     
-    await createNovel(title, author);
+    try {
+      await createNovel(title, author);
+      toast.success("Buku baru berhasil dibuat!");
+    } catch (e: any) {
+      toast.error("Gagal membuat buku.");
+    }
   };
 
   const handleDeleteNovel = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     if (window.confirm("Apakah Anda yakin ingin menghapus novel ini selamanya secara permanen?")) {
-      await deleteNovel(id);
-      
-      // Cleanup history if currently reading this novel
-      if (history?.novelId === id) {
-         localStorage.removeItem('last_read');
+      try {
+        await deleteNovel(id);
+        toast.success("Buku berhasil dihapus secara permanen.");
+        
+        // Cleanup history if currently reading this novel
+        if (history?.novelId === id) {
+           localStorage.removeItem('last_read');
+        }
+      } catch (e: any) {
+        toast.error("Gagal menghapus buku.");
       }
     }
   };
@@ -61,13 +85,22 @@ export default function Bookshelf({ novels }: BookshelfProps) {
           <h1 className="text-3xl font-bold tracking-tight">Rak Buku</h1>
           <p className="text-muted-foreground mt-1 text-sm">Karya tulisanmu tersimpan di sini</p>
         </div>
-        <button 
-          onClick={handleBackup} 
-          className="p-2.5 bg-muted hover:bg-muted/80 rounded-full text-foreground transition-all active:scale-95" 
-          title="Backup Draf & Pengaturan"
-        >
-          <Download size={20} />
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={handleBackup} 
+            className="p-2.5 bg-muted hover:bg-muted/80 rounded-full text-foreground transition-all active:scale-95" 
+            title="Backup Draf & Pengaturan"
+          >
+            <Download size={20} />
+          </button>
+          <button 
+            onClick={handleLogout} 
+            className="p-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-full transition-all active:scale-95" 
+            title="Keluar (Logout)"
+          >
+            <LogOut size={20} />
+          </button>
+        </div>
       </header>
 
       {/* Main Content */}

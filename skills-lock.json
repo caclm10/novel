@@ -1,6 +1,16 @@
 {
   "version": 1,
   "skills": {
+    "appwrite-cli": {
+      "source": "appwrite/agent-skills",
+      "sourceType": "github",
+      "computedHash": "db1c6b79d6c5b34112b4167bada8e2c151813da0b53c406ff26dcf8a1d7a71ca"
+    },
+    "appwrite-typescript": {
+      "source": "appwrite/agent-skills",
+      "sourceType": "github",
+      "computedHash": "38ba75d56d9d6fba0cf6150d9ee9fef5f7ff352b148bf715557c12be6b1a4905"
+    },
     "better-auth-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
@@ -20,6 +30,26 @@
       "source": "better-auth/skills",
       "sourceType": "github",
       "computedHash": "747d7f73bd9e2ec5317b8ef88dc70f97df716d00e3d02de4051feebaa48b062d"
+    },
+    "firebase-auth-basics": {
+      "source": "firebase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "ff79d278c0968f297d60f37532c32fd3b8bd9aad9c64b9f354585c701e80112a"
+    },
+    "firebase-basics": {
+      "source": "firebase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "c22edefdc07886432f1361b0412f82ccd53f82d107005acd6dae326f1e106ea7"
+    },
+    "firebase-firestore-standard": {
+      "source": "firebase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "ab2332607f40ae408e9c56e177b02fad55e071bfac4c2035a16ce0787768953e"
+    },
+    "firestore-security-rules-auditor": {
+      "source": "firebase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "8b797ed45d9d171b3a88f4980d72fc4accd1257206c555f4935599f9b9fd7d28"
     },
     "next-best-practices": {
       "source": "vercel-labs/next-skills",

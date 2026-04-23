@@ -4,20 +4,24 @@ import React from 'react';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Chapter, Novel } from '../types/novel';
-import { ChevronLeft, Check, Bold, Italic, Heading1, Heading2 } from 'lucide-react';
+import { ChevronLeft, Check, Bold, Italic, Heading1, Heading2, Cloud, WifiOff } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { upsertChapter } from '@/actions/chapter';
+import { databases } from '@/lib/appwrite';
+import { appwriteConfig } from '@/lib/appwrite/config';
+import { toast } from "sonner";
 
 const ContentEditableBlock = React.memo(
-  React.forwardRef<HTMLDivElement, { initialHtml: string; onInput: (html: string) => void }>(
-    ({ initialHtml, onInput }, ref) => {
+  React.forwardRef<HTMLDivElement, { initialHtml: string; onInput: (html: string) => void; onKeyDown?: (e: React.KeyboardEvent) => void }>(
+    ({ initialHtml, onInput, onKeyDown }, ref) => {
       return (
         <div
           ref={ref}
           contentEditable
           suppressContentEditableWarning
           onInput={(e) => onInput(e.currentTarget.innerHTML)}
+          onKeyDown={onKeyDown}
           className="w-full h-full min-h-[50vh] outline-none font-sans text-lg md:text-xl leading-[1.8] text-foreground/90 whitespace-pre-wrap break-words"
           style={{ whiteSpace: 'pre-wrap' }}
           dangerouslySetInnerHTML={{ __html: initialHtml }}
@@ -37,16 +41,29 @@ export default function Editor({ initialChapter, novelId }: EditorProps) {
   const router = useRouter();
   
   // Data state
-  const [content, setContent] = useState(initialChapter.content);
+  const [content, setContent] = useState(initialChapter.content || '');
   const [wordCount, setWordCount] = useState(0);
   
   // Auto-save state
-  const [saveStatus, setSaveStatus] = useState<'Mengetik...' | 'Menyimpan...' | 'Tersimpan' | 'Gagal Simpan'>('Tersimpan');
+  const [saveStatus, setSaveStatus] = useState<'Tersimpan' | 'Menunggu' | 'Menyinkronkan paragraf...' | 'Semua tersimpan di Cloud' | 'Gagal Simpan'>('Tersimpan');
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
 
   // Floating Toolbar state
   const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    }
+  }, []);
 
   // Update word count
   useEffect(() => {
@@ -54,26 +71,50 @@ export default function Editor({ initialChapter, novelId }: EditorProps) {
     setWordCount(words);
   }, [content]);
 
+  const saveToAppwrite = async (html: string) => {
+    if (!isOnline) {
+       setSaveStatus('Gagal Simpan');
+       return;
+    }
+    setSaveStatus('Menyinkronkan paragraf...');
+    try {
+      await upsertChapter(initialChapter.id, html); // Fallback to Server Action just in case
+      await databases.updateDocument(
+         appwriteConfig.databaseId,
+         appwriteConfig.chaptersTableId,
+         initialChapter.id,
+         { content: html }
+      );
+      setSaveStatus('Semua tersimpan di Cloud'); 
+    } catch (err) {
+      console.error("Failed to save to Appwrite", err);
+      setSaveStatus('Gagal Simpan');
+      toast.error("Gagal sinkronisasi dengan Cloud.");
+    }
+  };
+
   // Debounced Auto-Save
   const handleInput = useCallback((html: string) => {
     setContent(html);
-    setSaveStatus('Mengetik...');
+    setSaveStatus('Menunggu');
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    typingTimeoutRef.current = setTimeout(async () => {
-      setSaveStatus('Menyimpan...');
-      try {
-        await upsertChapter(initialChapter.id, html);
-        setSaveStatus('Tersimpan'); 
-      } catch (err) {
-        console.error("Failed to save to database", err);
-        setSaveStatus('Gagal Simpan');
-      }
-    }, 1500);
-  }, [initialChapter.id, novelId]);
+    typingTimeoutRef.current = setTimeout(() => {
+      saveToAppwrite(html);
+    }, 3000);
+  }, [initialChapter.id, novelId, isOnline]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      setTimeout(() => {
+         if (editorRef.current) saveToAppwrite(editorRef.current.innerHTML);
+      }, 50);
+    }
+  }, [initialChapter.id, isOnline]);
 
   // Handle Text Selection for Floating Toolbar
   const handleSelection = useCallback(() => {
@@ -115,8 +156,7 @@ export default function Editor({ initialChapter, novelId }: EditorProps) {
 
   // Tandai selesai
   const handleFinish = () => {
-     // Di aplikasi nyata, Anda akan fetch / triger API di sini untuk menandai status ke 'Final'
-     // Menyentuh state yang lebih tinggi atau memanggil endpoint / rute server act.
+     toast.success("Bab selesai ditulis!");
      router.push(`/novel/${novelId}`);
   };
 
@@ -137,12 +177,15 @@ export default function Editor({ initialChapter, novelId }: EditorProps) {
           <div className="flex-1 px-4 truncate flex items-center justify-center gap-2">
             <span className="font-semibold text-sm truncate">{initialChapter.title}</span>
             {/* Status Menyimpan */}
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors
-              ${saveStatus === 'Tersimpan' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 
-                saveStatus === 'Menyimpan...' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 
-                'bg-muted text-muted-foreground border-transparent'}
+            <span className={`flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors
+              ${!isOnline ? 'bg-red-500/10 text-red-500 border-red-500/20' : 
+                (saveStatus === 'Tersimpan' || saveStatus === 'Semua tersimpan di Cloud') ? 'bg-green-500/10 text-green-500 border-green-500/20' : 
+                saveStatus === 'Menyinkronkan paragraf...' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 
+                saveStatus === 'Menunggu' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' : 
+                'bg-red-500/10 text-red-500 border-red-500/20'}
             `}>
-              {saveStatus}
+              {!isOnline ? <WifiOff size={10} /> : <Cloud size={10} />}
+              {!isOnline ? 'Offline' : saveStatus}
             </span>
           </div>
 
@@ -165,8 +208,9 @@ export default function Editor({ initialChapter, novelId }: EditorProps) {
         <ContentEditableBlock 
           key={initialChapter.id}
           ref={editorRef}
-          initialHtml={initialChapter.content}
+          initialHtml={initialChapter.content || ''}
           onInput={handleInput}
+          onKeyDown={handleKeyDown}
         />
       </main>
 

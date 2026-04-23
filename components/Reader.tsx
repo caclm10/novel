@@ -9,6 +9,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useReadingPreferences } from '../hooks/useReadingPreferences';
 import { useReadingHistory } from '../hooks/useReadingHistory';
+import { client } from '@/lib/appwrite';
+import { appwriteConfig } from '@/lib/appwrite/config';
 
 interface ReaderProps {
   chapter: Chapter;
@@ -21,6 +23,20 @@ export default function Reader({ chapter, novel }: ReaderProps) {
   
   const { prefs, updatePrefs } = useReadingPreferences();
   const { saveHistory } = useReadingHistory();
+
+  // Real-time state
+  const [liveContent, setLiveContent] = useState(chapter.content || '');
+
+  useEffect(() => {
+    const channel = `databases.${appwriteConfig.databaseId}.collections.${appwriteConfig.chaptersTableId}.documents.${chapter.id}`;
+    const unsubscribe = client.subscribe(channel, (response: any) => {
+      if (response.payload && response.payload.content !== undefined) {
+         setLiveContent(response.payload.content);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [chapter.id]);
 
   // state for UI interactions
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -180,7 +196,7 @@ export default function Reader({ chapter, novel }: ReaderProps) {
                 lineHeight: prefs.lineSpacing,
                 fontSize: `${prefs.fontSize}px` 
               }}
-              dangerouslySetInnerHTML={{ __html: chapter.content || '' }}
+              dangerouslySetInnerHTML={{ __html: liveContent }}
             />
             
             <div className="mt-16 text-center text-xs text-muted-foreground uppercase tracking-widest font-sans">

@@ -1,41 +1,64 @@
 "use server";
 
-import { db } from "../db";
-import { chapters } from "../db/schema";
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { ID, Query, Databases } from "node-appwrite";
+import { getSessionClient, getSessionUser } from "@/lib/appwrite/server";
+import { appwriteConfig } from "@/lib/appwrite/config";
 
-export async function upsertChapter(chapterId: string, content: string, status?: 'Draft' | 'Final') {
+const getDatabases = async () => {
+    const client = await getSessionClient();
+    return new Databases(client);
+}
+
+export async function upsertChapter(chapterId: string, content: string) {
+  const databases = await getDatabases();
   const updates: any = { content };
-  if (status) updates.status = status;
   
-  await db.update(chapters)
-    .set(updates)
-    .where(eq(chapters.id, chapterId));
+  await databases.updateDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.chaptersTableId,
+      chapterId,
+      updates
+  );
   
-  // Memberitahu Next.js bahwa cache halaman bacaan harus diperbaharui
-  // revalidatePath('/'); 
   return { success: true };
 }
 
 export async function createChapter(volumeId: string, title: string, novelId: string) {
-  const id = `ch_${Date.now()}`;
-  const existingChapters = await db.query.chapters.findMany({ where: eq(chapters.volumeId, volumeId) });
-  const order = existingChapters.length;
+  const databases = await getDatabases();
+  const user = await getSessionUser();
+  if (!user) throw new Error("Unauthorized");
+  
+  const id = ID.unique();
+  
+  const existing = await databases.listDocuments(
+      appwriteConfig.databaseId, appwriteConfig.chaptersTableId, [Query.equal('volumeId', volumeId)]
+  );
 
-  await db.insert(chapters).values({
-     id,
-     volumeId,
-     title,
-     content: '<p>Tulis cerita bab ini di sini...</p>',
-     order
-  });
+  await databases.createDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.chaptersTableId,
+      id,
+      {
+         novelId,
+         volumeId,
+         title,
+         content: '<p>Tulis cerita bab ini di sini...</p>',
+         order: existing.total,
+         userId: user.$id
+      }
+  );
   revalidatePath(`/novel/${novelId}`);
   return id;
 }
 
 export async function deleteChapter(chapterId: string, novelId: string) {
-  await db.delete(chapters).where(eq(chapters.id, chapterId));
+  const databases = await getDatabases();
+  await databases.deleteDocument(
+      appwriteConfig.databaseId,
+      appwriteConfig.chaptersTableId,
+      chapterId
+  );
   revalidatePath(`/novel/${novelId}`);
   return { success: true };
 }
